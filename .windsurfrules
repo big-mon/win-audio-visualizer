@@ -1,0 +1,44 @@
+# バージョン管理
+## Git運用
+- 開発はfeatureブランチで実施
+- mainブランチへの直接プッシュは禁止
+- 変更後は適宜ローカルブランチへコミット
+
+## GitHubリポジトリ
+- リポジトリ名: `win-audio-visualizer`
+- URL: `https://github.com/big-mon/win-audio-visualizer`
+- リモートブランチ: `origin`
+- リモートブランチへの直接コミット禁止
+- リモートブランチへの直接プッシュ禁止
+- プルリクエスト必須
+
+## コミットメッセージ
+- フォーマット: `<type>: <subject>`
+  - 例: `feat: グラフ表示機能を追加`
+- タイプ一覧:
+  - feat: 新機能
+  - fix: バグ修正
+  - docs: ドキュメント更新
+  - style: フォーマット変更
+  - refactor: リファクタリング
+  - test: テスト関連
+
+# コード品質
+## ディレクトリ構造
+- ドキュメント: `docs/`
+
+## コーディング規約
+- 関数・クラス: docstring必須
+- 変数名: 説明的で具体的な命名
+- 関数長: 50行以内を推奨
+- ファイルサイズ: 500行以内を推奨
+
+# 依存関係
+## 主要ライブラリ
+- sounddevice: 音声キャプチャ
+- numpy: 数値計算
+- matplotlib: ビジュアライゼーション
+
+# 参考資料
+- [sounddeviceドキュメント](https://python-sounddevice.readthedocs.io/en/latest/)
+- [matplotlibドキュメント](https://matplotlib.org/stable/contents.html)
