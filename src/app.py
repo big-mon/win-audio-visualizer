@@ -17,15 +17,19 @@ def main():
     # オーディオプロセッサーとビジュアライザーを初期化
     processor = AudioProcessor()
     visualizer = Visualizer()
-    
-    # オーディオキャプチャを開始
-    processor.start_capture()
-    
-    # ビジュアライゼーションを開始
-    visualizer.start_animation(processor)
-    
-    # キャプチャを停止
-    processor.stop_capture()
+
+    try:
+        # オーディオキャプチャを開始
+        processor.start_capture()
+
+        # ビジュアライゼーションを開始
+        visualizer.start_animation(processor)
+
+    except KeyboardInterrupt:
+        print("\nアプリケーションを停止しました")
+    finally:
+        # キャプチャを停止
+        processor.stop_capture()
 
 if __name__ == "__main__":
     main()
