@@ -53,6 +53,7 @@ class Visualizer:
         ax1.set_ylim(-1, 1)
         ax1.set_xlim(0, self.window_size)
         self.wave_line, = ax1.plot(np.arange(self.window_size), np.zeros(self.window_size))
+        self.wave_line.set_color('skyblue')
 
         # スペクトラムプロット
         ax2.set_title('スペクトラム')
@@ -61,6 +62,7 @@ class Visualizer:
         ax2.set_xscale('log')
         self.spectrum_line, = ax2.plot(np.linspace(0, self.sample_rate//2, self.window_size//2 + 1),
                                      np.zeros(self.window_size//2 + 1))
+        self.spectrum_line.set_color('limegreen')
 
         # グラフの体裁を整える
         plt.tight_layout()
@@ -90,11 +92,13 @@ class Visualizer:
 
             if wave_data is not None and spectrum_data is not None:
                 # 波形データを更新
+                self.wave_max *= 0.995  # 徐々に減衰
                 self.wave_max = max(self.wave_max, np.max(np.abs(wave_data)))
                 normalized_wave = wave_data / self.wave_max
                 self.plot_data = normalized_wave
 
                 # スペクトラムデータを更新
+                self.spectrum_max *= 0.995  # 徐々に減衰
                 self.spectrum_max = max(self.spectrum_max, np.max(spectrum_data))
                 normalized_spectrum = spectrum_data / self.spectrum_max
                 self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
