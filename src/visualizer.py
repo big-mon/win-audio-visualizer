@@ -106,7 +106,7 @@ class Visualizer:
 
         return self.wave_line, self.spectrum_line
 
-    def start_animation(self, audio_processor, interval=50):
+    def start_animation(self, audio_processor, interval=10):
         """
         アニメーションを開始
 
