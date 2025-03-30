@@ -101,21 +101,14 @@ class Visualizer:
                 self.plot_data = normalized_wave
                 self.wave_line.set_ydata(self.plot_data)
 
-                # スペクトラムデータを更新
-                self.spectrum_max *= 0.995
-                self.spectrum_max = max(self.spectrum_max, np.max(spectrum_data))
-                normalized_spectrum = spectrum_data / self.spectrum_max
-                self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
-                                     self.smoothing_factor * normalized_spectrum
-
-                # フェード処理
+                # フェード処理(スペクトラム)
                 amplitude = np.max(np.abs(wave_data))
                 if amplitude < 0.01:
                     self.spectrum_alpha = max(0.0, self.spectrum_alpha - self.alpha_decay)
                 else:
                     self.spectrum_alpha = min(1.0, self.spectrum_alpha + self.alpha_decay * 2)
                     self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
-                         self.smoothing_factor * normalized_spectrum
+                         self.smoothing_factor * spectrum_data
 
                 # プロットを更新
                 self.spectrum_line.set_ydata(self.spectrum_data)
