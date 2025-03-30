@@ -129,7 +129,8 @@ class Visualizer:
             self.update_plot,
             fargs=(audio_processor,),
             interval=interval,
-            blit=True
+            blit=True,
+            cache_frame_data=False
         )
         plt.show()
 
