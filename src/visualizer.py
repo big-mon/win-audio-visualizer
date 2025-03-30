@@ -51,21 +51,38 @@ class Visualizer:
         """
         self.fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
 
+        # 背景色を黒色に
+        self.fig.patch.set_facecolor('black') # 図全体の背景
+        ax1.set_facecolor('black') # 波形プロットの背景
+        ax2.set_facecolor('black') # スペクトラムプロットの背景
+
         # 波形プロット
-        ax1.set_title('波形')
+        ax1.set_title('波形', color='white')
         ax1.set_ylim(-1, 1)
         ax1.set_xlim(0, self.window_size)
         self.wave_line, = ax1.plot(np.arange(self.window_size), np.zeros(self.window_size))
         self.wave_line.set_color('skyblue')
 
         # スペクトラムプロット
-        ax2.set_title('スペクトラム')
+        ax2.set_title('スペクトラム', color='white')
         ax2.set_ylim(-100, 50)
         ax2.set_xlim(20, 10000)
         ax2.set_xscale('log')
         self.spectrum_line, = ax2.plot(np.linspace(0, self.sample_rate//2, self.window_size//2 + 1),
                                      np.zeros(self.window_size//2 + 1))
         self.spectrum_line.set_color('limegreen')
+
+        # 軸・ラベルなどの色
+        for ax in (ax1, ax2):
+            ax.xaxis.label.set_color('white')
+            ax.yaxis.label.set_color('white')
+            ax.tick_params(axis='x', colors='white')
+            ax.tick_params(axis='y', colors='white')
+            ax.spines['bottom'].set_color('white')
+            ax.spines['top'].set_color('white')
+            ax.spines['left'].set_color('white')
+            ax.spines['right'].set_color('white')
+            ax.grid(color='gray')
 
         # グラフの体裁を整える
         plt.tight_layout()
