@@ -42,6 +42,9 @@ class Visualizer:
         self.wave_max = 0.1      # 波形の最大値（自動調整用）
         self.smoothing_factor = 0.2  # データの平滑化係数
 
+        self.spectrum_alpha = 1.0 # 初期透明度
+        self.alpha_decay = 0.05   # 透明度減少係数
+
     def setup_plot(self):
         """
         プロットの初期設定
@@ -57,8 +60,8 @@ class Visualizer:
 
         # スペクトラムプロット
         ax2.set_title('スペクトラム')
-        ax2.set_ylim(0, 1)
-        ax2.set_xlim(0, self.sample_rate // 2)
+        ax2.set_ylim(-100, 50)
+        ax2.set_xlim(20, 10000)
         ax2.set_xscale('log')
         self.spectrum_line, = ax2.plot(np.linspace(0, self.sample_rate//2, self.window_size//2 + 1),
                                      np.zeros(self.window_size//2 + 1))
@@ -92,21 +95,31 @@ class Visualizer:
 
             if wave_data is not None and spectrum_data is not None:
                 # 波形データを更新
-                self.wave_max *= 0.995  # 徐々に減衰
+                self.wave_max *= 0.995
                 self.wave_max = max(self.wave_max, np.max(np.abs(wave_data)))
                 normalized_wave = wave_data / self.wave_max
                 self.plot_data = normalized_wave
+                self.wave_line.set_ydata(self.plot_data)
 
                 # スペクトラムデータを更新
-                self.spectrum_max *= 0.995  # 徐々に減衰
+                self.spectrum_max *= 0.995
                 self.spectrum_max = max(self.spectrum_max, np.max(spectrum_data))
                 normalized_spectrum = spectrum_data / self.spectrum_max
                 self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
-                                   self.smoothing_factor * normalized_spectrum
+                                     self.smoothing_factor * normalized_spectrum
+
+                # フェード処理
+                amplitude = np.max(np.abs(wave_data))
+                if amplitude < 0.01:
+                    self.spectrum_alpha = max(0.0, self.spectrum_alpha - self.alpha_decay)
+                else:
+                    self.spectrum_alpha = min(1.0, self.spectrum_alpha + self.alpha_decay * 2)
+                    self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
+                         self.smoothing_factor * normalized_spectrum
 
                 # プロットを更新
-                self.wave_line.set_ydata(self.plot_data)
                 self.spectrum_line.set_ydata(self.spectrum_data)
+                self.spectrum_line.set_alpha(self.spectrum_alpha)
 
         return self.wave_line, self.spectrum_line
 
