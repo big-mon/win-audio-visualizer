@@ -103,7 +103,7 @@ class Visualizer:
 
                 # フェード処理(スペクトラム)
                 amplitude = np.max(np.abs(wave_data))
-                if amplitude < 0.01:
+                if amplitude < 0.003:
                     self.spectrum_alpha = max(0.0, self.spectrum_alpha - self.alpha_decay)
                 else:
                     self.spectrum_alpha = min(1.0, self.spectrum_alpha + self.alpha_decay * 2)
