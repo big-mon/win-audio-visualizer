@@ -99,7 +99,11 @@ class Visualizer:
                 self.wave_max = max(self.wave_max, np.max(np.abs(wave_data)))
                 normalized_wave = wave_data / self.wave_max
                 self.plot_data = normalized_wave
-                self.wave_line.set_ydata(self.plot_data)
+                try:
+                    self.wave_line.set_ydata(self.plot_data)
+                except RuntimeError:
+                    # ウィンドウが閉じられて描画対象が無くなった場合のエラーを無視
+                    pass
 
                 # フェード処理(スペクトラム)
                 amplitude = np.max(np.abs(wave_data))
@@ -110,9 +114,13 @@ class Visualizer:
                     self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
                          self.smoothing_factor * spectrum_data
 
-                # プロットを更新
-                self.spectrum_line.set_ydata(self.spectrum_data)
-                self.spectrum_line.set_alpha(self.spectrum_alpha)
+                try:
+                    # プロットを更新
+                    self.spectrum_line.set_ydata(self.spectrum_data)
+                    self.spectrum_line.set_alpha(self.spectrum_alpha)
+                except RuntimeError:
+                    # ウィンドウが閉じられて描画対象が無くなった場合のエラーを無視
+                    pass
 
         return self.wave_line, self.spectrum_line
 
