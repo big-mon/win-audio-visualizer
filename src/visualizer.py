@@ -34,6 +34,8 @@ class Visualizer:
         self.sample_rate = sample_rate
         self.plot_data = np.zeros(window_size)
         self.spectrum_data = np.zeros(window_size // 2 + 1)
+        self.wave_glow_data = np.zeros(window_size)
+        self.spectrum_glow_data = np.zeros(window_size // 2 + 1)
         self.fig = None
         self.animation = None
 
@@ -62,15 +64,25 @@ class Visualizer:
         ax1.set_xlim(0, self.window_size)
         self.wave_line, = ax1.plot(np.arange(self.window_size), np.zeros(self.window_size))
         self.wave_line.set_color('skyblue')
+        self.wave_glow_line, = ax1.plot(np.arange(self.window_size), self.wave_glow_data)
+        self.wave_glow_line.set_color('deepskyblue')
+        self.wave_glow_line.set_linewidth(5)
+        self.wave_glow_line.set_alpha(0.05)
+        self.wave_glow_line.set_zorder(1)
 
         # スペクトラムプロット
         ax2.set_title('スペクトラム', color='white')
         ax2.set_ylim(-100, 50)
         ax2.set_xlim(20, 10000)
         ax2.set_xscale('log')
-        self.spectrum_line, = ax2.plot(np.linspace(0, self.sample_rate//2, self.window_size//2 + 1),
-                                     np.zeros(self.window_size//2 + 1))
+        x_vals = np.linspace(0, self.sample_rate//2, self.window_size//2 + 1)
+        self.spectrum_line, = ax2.plot(x_vals, np.zeros(self.window_size//2 + 1))
         self.spectrum_line.set_color('limegreen')
+        self.spectrum_glow_line, = ax2.plot(x_vals, self.spectrum_glow_data)
+        self.spectrum_glow_line.set_color('mediumseagreen')
+        self.spectrum_glow_line.set_linewidth(5)
+        self.spectrum_glow_line.set_alpha(0.05)
+        self.spectrum_glow_line.set_zorder(1)
 
         # 軸・ラベルなどの色
         for ax in (ax1, ax2):
@@ -111,18 +123,19 @@ class Visualizer:
             wave_data, spectrum_data = audio_processor.process_audio_data(data)
 
             if wave_data is not None and spectrum_data is not None:
-                # 波形データを更新
+                # 波形データの更新
                 self.wave_max *= 0.995
                 self.wave_max = max(self.wave_max, np.max(np.abs(wave_data)))
                 normalized_wave = wave_data / self.wave_max
                 self.plot_data = normalized_wave
+                self.wave_glow_data = normalized_wave  # ← 毎回更新
                 try:
                     self.wave_line.set_ydata(self.plot_data)
+                    self.wave_glow_line.set_ydata(self.wave_glow_data)
                 except RuntimeError:
-                    # ウィンドウが閉じられて描画対象が無くなった場合のエラーを無視
                     pass
 
-                # フェード処理(スペクトラム)
+                # フェード処理（スペクトラム）
                 amplitude = np.max(np.abs(wave_data))
                 if amplitude < 0.003:
                     self.spectrum_alpha = max(0.0, self.spectrum_alpha - self.alpha_decay)
@@ -130,16 +143,17 @@ class Visualizer:
                     self.spectrum_alpha = min(1.0, self.spectrum_alpha + self.alpha_decay * 2)
                     self.spectrum_data = (1 - self.smoothing_factor) * self.spectrum_data + \
                          self.smoothing_factor * spectrum_data
+                self.spectrum_glow_data = self.spectrum_data  # ← 条件外でも更新
 
                 try:
-                    # プロットを更新
                     self.spectrum_line.set_ydata(self.spectrum_data)
                     self.spectrum_line.set_alpha(self.spectrum_alpha)
+                    self.spectrum_glow_line.set_ydata(self.spectrum_glow_data)
+                    self.spectrum_glow_line.set_alpha(self.spectrum_alpha * 0.3)
                 except RuntimeError:
-                    # ウィンドウが閉じられて描画対象が無くなった場合のエラーを無視
                     pass
 
-        return self.wave_line, self.spectrum_line
+        return self.wave_line, self.wave_glow_line, self.spectrum_line, self.spectrum_glow_line
 
     def start_animation(self, audio_processor, interval=10):
         """
