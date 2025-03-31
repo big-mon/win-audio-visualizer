@@ -64,6 +64,17 @@ class CircularVisualizer:
 
         # 表示モード（1: 波形のみ、2: スペクトラムのみ、3: 両方）
         self.display_mode = 3
+        
+        # 主体となる円のパラメータ
+        self.main_circle_enabled = True
+        self.main_circle_radius = 0.7
+        self.main_circle_width = 2
+        self.main_circle_detail = 200  # 円の詳細度
+        self.main_circle_layers = 5    # 多重円のレイヤー数
+        self.main_circle_glow = True   # グローエフェクト
+        self.main_circle = None
+        self.main_circle_glow_effect = None
+        self.main_circle_inner_layers = []
 
         # プロットウィジェットとデータアイテム
         self.plot_widget = None
@@ -78,8 +89,8 @@ class CircularVisualizer:
         
         # パーティクルエフェクト
         self.particles = []
-        self.num_particles = 50
-        self.particle_life = 100  # フレーム数
+        self.num_particles = 80  # パーティクル数を増加
+        self.particle_life = 120  # フレーム数を増加
         
         # パルスエフェクト
         self.pulse_radius = 0.0
@@ -90,9 +101,10 @@ class CircularVisualizer:
         
         # 色の変化
         self.hue = 0.0  # 色相（0.0-1.0）
-        self.hue_shift_speed = 0.002  # 色相変化速度
-        self.wave_base_color = (0, 255, 255)  # シアン
-        self.spectrum_base_color = (138, 43, 226)  # パープル
+        self.hue_shift_speed = 0.001  # 色相変化速度を遅く
+        self.wave_base_color = (0, 200, 255)  # 明るいシアン
+        self.spectrum_base_color = (20, 180, 255)  # 明るいブルー
+        self.main_circle_color = (0, 220, 255)  # 主体となる円の色
         
         # 時間経過とアニメーション
         self.frame_count = 0
@@ -137,6 +149,9 @@ class CircularVisualizer:
         self.plot_widget.hideAxis('bottom')
         self.plot_widget.setXRange(-1, 1)
         self.plot_widget.setYRange(-1, 1)
+        
+        # 主体となる円の初期化
+        self._setup_main_circle()
 
         # 波形カーブの初期化
         wave_pen = pg.mkPen(color=QColor(*self.wave_base_color), width=2)
@@ -193,58 +208,102 @@ class CircularVisualizer:
 
         return self.win
     
-    def _create_particle(self, active=True):
+    def _setup_main_circle(self):
         """
-        パーティクルを作成
-        
-        Parameters
-        ----------
-        active : bool, optional
-            パーティクルをアクティブにするかどうか
-            
-        Returns
-        -------
-        pg.PlotCurveItem
-            パーティクルのプロットアイテム
+        主体となる円の設定
         """
-        if active:
-            # ランダムな角度と半径
-            angle = random.uniform(0, 2 * np.pi)
-            radius = random.uniform(0.2, 0.4)
-            
-            # 速度と寿命
-            speed = random.uniform(0.005, 0.015)
-            life = random.randint(30, self.particle_life)
-            
-            # 色
-            hue = random.uniform(0, 1)
-            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.8, 1.0)]
-            
-            # パーティクルの属性を設定
-            particle = {
-                'angle': angle,
-                'radius': radius,
-                'speed': speed,
-                'life': life,
-                'max_life': life,
-                'color': (r, g, b)
-            }
-        else:
-            particle = {
-                'angle': 0,
-                'radius': 0,
-                'speed': 0,
-                'life': 0,
-                'max_life': 0,
-                'color': (0, 0, 0)
-            }
+        # 主体となる円の初期化
+        main_circle_pen = pg.mkPen(color=QColor(*self.main_circle_color), width=self.main_circle_width)
+        self.main_circle = pg.PlotCurveItem(pen=main_circle_pen)
+        self.plot_widget.addItem(self.main_circle)
         
-        # プロットアイテムを作成
-        plot_item = pg.PlotCurveItem(pen=None)
-        plot_item.setData([0], [0])
-        plot_item.particle_data = particle
+        # グローエフェクト
+        if self.main_circle_glow:
+            glow_pen = pg.mkPen(color=QColor(*self.main_circle_color, 30), width=12)
+            self.main_circle_glow_effect = pg.PlotCurveItem(pen=glow_pen)
+            self.plot_widget.addItem(self.main_circle_glow_effect)
         
-        return plot_item
+        # 内側のレイヤー
+        for i in range(self.main_circle_layers):
+            layer_radius = self.main_circle_radius * (0.85 - i * 0.15)
+            alpha = 150 - i * 25
+            width = 1 if i > 0 else 2
+            
+            layer_pen = pg.mkPen(color=QColor(*self.main_circle_color, alpha), width=width)
+            layer = pg.PlotCurveItem(pen=layer_pen)
+            self.main_circle_inner_layers.append(layer)
+            self.plot_widget.addItem(layer)
+            
+        # 初期データの設定
+        self._update_main_circle()
+    
+    def _update_main_circle(self):
+        """
+        主体となる円の更新
+        """
+        if not self.main_circle_enabled:
+            return
+            
+        # 基本的な円の座標
+        theta = np.linspace(0, 2*np.pi, self.main_circle_detail)
+        
+        # 時間経過による変動
+        time_variation = 0.03 * np.sin(theta * 5 + self.time_factor * 0.5)
+        
+        # 複数の周波数成分を持つ変形
+        distortion = (
+            0.02 * np.sin(theta * 3 + self.time_factor) +
+            0.01 * np.sin(theta * 7 + self.time_factor * 1.3) +
+            0.015 * np.sin(theta * 5 + self.time_factor * 0.7)
+        )
+        
+        # 最終的な半径を計算
+        radius = self.main_circle_radius + time_variation + distortion
+        
+        # 極座標からデカルト座標に変換
+        x = radius * np.cos(theta)
+        y = radius * np.sin(theta)
+        
+        # 色を時間とともに変化
+        hue = self.hue
+        r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.8, 1.0)]
+        
+        # 主体となる円を更新
+        self.main_circle.setData(x, y)
+        self.main_circle.setPen(pg.mkPen(color=QColor(r, g, b), width=self.main_circle_width))
+        
+        # グローエフェクトを更新
+        if self.main_circle_glow and self.main_circle_glow_effect is not None:
+            glow_width = 12 + 4 * np.sin(self.time_factor * 0.5)
+            glow_alpha = int(30 + 15 * np.sin(self.time_factor * 0.3))
+            self.main_circle_glow_effect.setData(x, y)
+            self.main_circle_glow_effect.setPen(pg.mkPen(color=QColor(r, g, b, glow_alpha), width=int(glow_width)))
+        
+        # 内側のレイヤーを更新
+        for i, layer in enumerate(self.main_circle_inner_layers):
+            layer_radius = self.main_circle_radius * (0.85 - i * 0.15)
+            layer_distortion = distortion * (0.8 - i * 0.1)
+            
+            # レイヤー固有の変動
+            layer_variation = 0.02 * np.sin(theta * (i+3) + self.time_factor * (0.5 + i * 0.1))
+            
+            # 最終的な半径を計算
+            final_radius = layer_radius + layer_variation + layer_distortion
+            
+            # 極座標からデカルト座標に変換
+            layer_x = final_radius * np.cos(theta)
+            layer_y = final_radius * np.sin(theta)
+            
+            # 色を少しずつ変化
+            layer_hue = (hue + i * 0.05) % 1.0
+            lr, lg, lb = [int(c * 255) for c in colorsys.hsv_to_rgb(layer_hue, 0.7, 0.9)]
+            
+            # 透明度も時間とともに変化
+            alpha = int(150 - i * 25 + 10 * np.sin(self.time_factor * 0.2 + i * 0.5))
+            
+            # レイヤーを更新
+            layer.setData(layer_x, layer_y)
+            layer.setPen(pg.mkPen(color=QColor(lr, lg, lb, alpha), width=1 if i > 0 else 2))
 
     def _setup_shortcuts(self):
         """
@@ -299,6 +358,59 @@ class CircularVisualizer:
         y = radius * np.sin(theta)
         return x, y
     
+    def _create_particle(self, active=True):
+        """
+        パーティクルを作成
+        
+        Parameters
+        ----------
+        active : bool, optional
+            パーティクルをアクティブにするかどうか
+            
+        Returns
+        -------
+        pg.PlotCurveItem
+            パーティクルのプロットアイテム
+        """
+        if active:
+            # ランダムな角度と半径
+            angle = random.uniform(0, 2 * np.pi)
+            radius = random.uniform(0.2, 0.4)
+            
+            # 速度と寿命
+            speed = random.uniform(0.003, 0.01)  # 速度を遅く
+            life = random.randint(50, self.particle_life)
+            
+            # 色
+            hue = random.uniform(0, 1)
+            r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.8, 1.0)]
+            
+            # パーティクルの属性を設定
+            particle = {
+                'angle': angle,
+                'radius': radius,
+                'speed': speed,
+                'life': life,
+                'max_life': life,
+                'color': (r, g, b)
+            }
+        else:
+            particle = {
+                'angle': 0,
+                'radius': 0,
+                'speed': 0,
+                'life': 0,
+                'max_life': 0,
+                'color': (0, 0, 0)
+            }
+        
+        # プロットアイテムを作成
+        plot_item = pg.PlotCurveItem(pen=None)
+        plot_item.setData([0], [0])
+        plot_item.particle_data = particle
+        
+        return plot_item
+
     def _update_particles(self, amplitude):
         """
         パーティクルの更新
@@ -309,9 +421,9 @@ class CircularVisualizer:
             音の振幅
         """
         # 音量が大きい場合、新しいパーティクルを生成
-        if amplitude > 0.1:
-            spawn_count = int(amplitude * 5)  # 音量に応じてパーティクル数を調整
-            for _ in range(min(spawn_count, 5)):  # 一度に生成するパーティクル数を制限
+        if amplitude > 0.08:  # 閾値を下げる
+            spawn_count = int(amplitude * 8)  # 音量に応じてパーティクル数を調整
+            for _ in range(min(spawn_count, 8)):  # 一度に生成するパーティクル数を増加
                 for particle_item in self.particles:
                     if particle_item.particle_data['life'] <= 0:
                         # 非アクティブなパーティクルを再利用
@@ -330,14 +442,14 @@ class CircularVisualizer:
                 particle['radius'] += particle['speed']
                 
                 # 透明度を計算（寿命に応じて徐々に透明に）
-                alpha = int(255 * (particle['life'] / particle['max_life']))
+                alpha = int(200 * (particle['life'] / particle['max_life']))
                 
                 # 座標を計算
                 x = particle['radius'] * math.cos(particle['angle'])
                 y = particle['radius'] * math.sin(particle['angle'])
                 
                 # サイズを計算（寿命に応じて小さく）
-                size = 0.02 * (particle['life'] / particle['max_life'])
+                size = 0.015 * (particle['life'] / particle['max_life'])
                 
                 # パーティクルの描画（小さな円として）
                 theta = np.linspace(0, 2*np.pi, 20)
@@ -437,6 +549,9 @@ class CircularVisualizer:
         # 色相を徐々に変化
         self.hue = (self.hue + self.hue_shift_speed) % 1.0
         
+        # 主体となる円を更新
+        self._update_main_circle()
+        
         # 同心円レイヤーを更新
         self._update_inner_circles()
         
@@ -500,6 +615,10 @@ class CircularVisualizer:
                     glow_width = int(8 + current_amplitude * 10)  # 音量に応じてグロー幅を変化
                     self.wave_glow_curve.setData(wave_x, wave_y)
                     self.wave_glow_curve.setPen(pg.mkPen(color=QColor(wave_r, wave_g, wave_b, 30), width=glow_width))
+                else:
+                    # 波形を非表示にする
+                    self.wave_curve.setData([], [])
+                    self.wave_glow_curve.setData([], [])
 
                 # スペクトラムの極座標変換
                 if self.display_mode == 2 or self.display_mode == 3:
@@ -531,6 +650,10 @@ class CircularVisualizer:
                     spectrum_glow_width = int(8 + np.mean(spectrum_values) * 10)
                     self.spectrum_glow_curve.setData(spectrum_x, spectrum_y)
                     self.spectrum_glow_curve.setPen(pg.mkPen(color=QColor(spectrum_r, spectrum_g, spectrum_b, 30), width=spectrum_glow_width))
+                else:
+                    # スペクトラムを非表示にする
+                    self.spectrum_curve.setData([], [])
+                    self.spectrum_glow_curve.setData([], [])
 
     def start_animation(self, audio_processor, interval=16):
         """
