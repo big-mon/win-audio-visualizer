@@ -43,6 +43,10 @@ class CircularVisualizer:
         self.wave_glow_data = np.zeros(window_size)
         self.spectrum_glow_data = np.zeros(window_size // 2 + 1)
 
+        # グロー効果の設定
+        self.glow_layers = 4
+        self.glow_curves = []
+
         # PyQtGraphアプリケーションとウィンドウ
         self.app = None
         self.win = None
@@ -72,15 +76,13 @@ class CircularVisualizer:
 
     def setup_plot(self):
         """
-        プロットの初期設定
+        プロットウィンドウを設定
         """
-        # PyQtGraphアプリケーションの設定
         if QtWidgets.QApplication.instance() is None:
             self.app = QtWidgets.QApplication([])
         else:
             self.app = QtWidgets.QApplication.instance()
 
-        # ウィンドウの設定
         self.win = QtWidgets.QMainWindow()
         self.win.setWindowTitle("神秘的ビジュアライザー")
         self.win.resize(1000, 1000)
@@ -89,7 +91,6 @@ class CircularVisualizer:
         self.win.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
 
-        # 波形プロットの設定
         self.wave_plot = pg.PlotWidget()
         self.wave_plot.setBackground((5, 5, 10))
         self.wave_plot.setAspectLocked(True)
@@ -98,15 +99,20 @@ class CircularVisualizer:
         self.wave_plot.setXRange(-1, 1)
         self.wave_plot.setYRange(-1, 1)
 
-        # 波形カーブの設定
+        # カーブの初期化
         self.wave_curve = pg.PlotCurveItem()
         self.wave_glow_curve = pg.PlotCurveItem()
 
-        # カーブをプロットに追加
+        # グロー層の追加（最初に描画されるように）
+        for i in range(self.glow_layers):
+            glow_curve = pg.PlotCurveItem()
+            self.wave_plot.addItem(glow_curve)
+            self.glow_curves.append(glow_curve)
+
+        # 波形カーブ（主）とそのグロー
         self.wave_plot.addItem(self.wave_glow_curve)
         self.wave_plot.addItem(self.wave_curve)
 
-        # プロットをレイアウトに追加
         layout.addWidget(self.wave_plot)
         self.win.show()
         return self.win
@@ -181,8 +187,17 @@ class CircularVisualizer:
                 r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.8, 1.0)]
                 self.wave_curve.setData(x, y)
                 self.wave_curve.setPen(pg.mkPen(color=QColor(r, g, b), width=2))
+
+                # 単層のグロー（ベースとして残しても良い）
                 self.wave_glow_curve.setData(x, y)
                 self.wave_glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, 30), width=10))
+
+                # 🌟 多重グローエフェクトの追加（最終的な神秘感の主役）
+                for i, glow_curve in enumerate(self.glow_curves):
+                    alpha = int(20 * (1.0 - i / self.glow_layers)) + 10
+                    width = 10 + i * 3
+                    glow_curve.setData(x, y)
+                    glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, alpha), width=width))
 
     def start_animation(self, audio_processor, interval=16):
         """
