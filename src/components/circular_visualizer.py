@@ -36,16 +36,13 @@ class CircularVisualizer:
         sample_rate : int, optional
             サンプリングレート
         """
+        # オーディオ処理用のバッファ
         self.window_size = window_size
         self.sample_rate = sample_rate
         self.plot_data = np.zeros(window_size)
         self.spectrum_data = np.zeros(window_size // 2 + 1)
         self.wave_glow_data = np.zeros(window_size)
         self.spectrum_glow_data = np.zeros(window_size // 2 + 1)
-
-        # グロー効果の設定
-        self.glow_layers = 4
-        self.glow_curves = []
 
         # PyQtGraphアプリケーションとウィンドウ
         self.app = None
@@ -64,7 +61,6 @@ class CircularVisualizer:
         self.wave_curve = None
         self.wave_glow_curve = None
 
-        # 円周上の点の数と基本半径
         self.num_points = 360
         self.base_radius = 0.4
         self.wave_scale = 0.2
@@ -75,12 +71,12 @@ class CircularVisualizer:
         self.hue_shift_speed = 0.001
 
         # 中心光のコア
-        self.core_glow_layers = 8
-        self.core_glow_curves = []
-        self.core_base_radius = 0.04
-        self.core_pulse_strength = 0.01
-        self.core_pulse_speed = 0.05
-        self.core_base_alpha = 35
+        self.core_glow_items = []
+        self.core_circle = None
+        self.core_radius = 0.15
+        self.core_alpha = 100
+        self.core_pulse_phase = 0.0
+        self.core_glow_layers = 3
 
     def setup_plot(self):
         """
@@ -91,14 +87,17 @@ class CircularVisualizer:
         else:
             self.app = QtWidgets.QApplication.instance()
 
+        # PyQtGraphウィンドウ
         self.win = QtWidgets.QMainWindow()
         self.win.setWindowTitle("神秘的ビジュアライザー")
         self.win.resize(1000, 1000)
 
+        # 中央ウィンドウ
         central_widget = QtWidgets.QWidget()
         self.win.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
 
+        # 波形プロット
         self.wave_plot = pg.PlotWidget()
         self.wave_plot.setBackground((5, 5, 10))
         self.wave_plot.setAspectLocked(True)
@@ -107,29 +106,25 @@ class CircularVisualizer:
         self.wave_plot.setXRange(-1, 1)
         self.wave_plot.setYRange(-1, 1)
 
-        # カーブの初期化
+        # 波形カーブ
         self.wave_curve = pg.PlotCurveItem()
         self.wave_glow_curve = pg.PlotCurveItem()
+        self.core_circle = pg.PlotCurveItem()
 
-        # グロー層の追加（最初に描画されるように）
-        for i in range(self.glow_layers):
-            glow_curve = pg.PlotCurveItem()
-            self.wave_plot.addItem(glow_curve)
-            self.glow_curves.append(glow_curve)
+        # グロー用アイテムを生成しておく
+        for i in range(self.core_glow_layers):
+            glow_item = pg.PlotCurveItem()
+            self.core_glow_items.append(glow_item)
+            self.wave_plot.addItem(glow_item)
 
-        # 波形カーブ（主）とそのグロー
+        # 順序: 背面から前面へ
+        self.wave_plot.addItem(self.core_circle)
         self.wave_plot.addItem(self.wave_glow_curve)
         self.wave_plot.addItem(self.wave_curve)
 
-        # 光のコア（中心の揺れる円）
-        for _ in range(self.core_glow_layers):
-            curve = pg.PlotCurveItem()
-            self.core_glow_curves.append(curve)
-            self.wave_plot.addItem(curve)
-
+        # プロットウィンドウをレイアウトに追加
         layout.addWidget(self.wave_plot)
         self.win.show()
-
         return self.win
 
     def _polar_to_cartesian(self, radius, theta):
@@ -165,6 +160,7 @@ class CircularVisualizer:
         """
         # 色相を更新
         self.hue = (self.hue + self.hue_shift_speed) % 1.0
+        complement_hue = (self.hue + 0.5) % 1.0
 
         # 音声データを取得
         data = audio_processor.get_audio_data()
@@ -198,39 +194,46 @@ class CircularVisualizer:
                 radius = self.base_radius + combined * self.wave_scale + organic_factor
                 x, y = self._polar_to_cartesian(radius, self.theta)
 
-                # 波形を描画
+                # 色を計算
                 r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.8, 1.0)]
+                cr, cg, cb = [int(c * 255) for c in colorsys.hsv_to_rgb(complement_hue, 0.7, 0.8)]
+
+                # 波形を更新
                 self.wave_curve.setData(x, y)
                 self.wave_curve.setPen(pg.mkPen(color=QColor(r, g, b), width=2))
-
-                # 単層のグロー（ベースとして残しても良い）
                 self.wave_glow_curve.setData(x, y)
-                self.wave_glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, 30), width=10))
+                self.wave_glow_curve.setPen(pg.mkPen(color=QColor(cr, cg, cb, 30), width=12))
 
-                # 🌟 多重グローエフェクトの追加（最終的な神秘感の主役）
-                for i, glow_curve in enumerate(self.glow_curves):
-                    alpha = int(20 * (1.0 - i / self.glow_layers)) + 10
-                    width = 10 + i * 3
-                    glow_curve.setData(x, y)
-                    glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, alpha), width=width))
+                # 光のコアを更新
+                self.core_pulse_phase += 0.05
+                noise = 0.002 * np.random.randn()
+                pulse_variation = 0.01 * np.sin(self.core_pulse_phase) + noise
+                core_r = self.core_radius + pulse_variation
 
-                # 光のコア（儚く脈打つ多重円）
-                pulse = self.core_pulse_strength * np.sin(self.hue * 2 * np.pi)  # ゆっくり鼓動
+                theta = np.linspace(0, 2*np.pi, 100)
+                cx = core_r * np.cos(theta)
+                cy = core_r * np.sin(theta)
 
-                for i, curve in enumerate(self.core_glow_curves):
-                    ratio = (i + 1) / self.core_glow_layers
-                    radius = self.core_base_radius * (1 + ratio * 1.5) + pulse * (1 - ratio)
-                    alpha = int(self.core_base_alpha * (1 - ratio)**1.5)  # より外を儚く
-                    width = 1 + int(3 * (1 - ratio))
+                # 彩度を時間で変化
+                sat = 0.6 + 0.3 * np.sin(self.core_pulse_phase * 0.8)
+                core_r_color, core_g, core_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, sat, 1.0)]
+                core_alpha = int(self.core_alpha + 50 * np.sin(self.core_pulse_phase * 0.5))
 
-                    theta = np.linspace(0, 2 * np.pi, 100)
-                    x = radius * np.cos(theta)
-                    y = radius * np.sin(theta)
+                self.core_circle.setData(cx, cy)
+                self.core_circle.setPen(pg.mkPen(color=QColor(core_r_color, core_g, core_b, core_alpha), width=20))
 
-                    # 白〜淡い青系で幻想的に
-                    r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb((self.hue + 0.55) % 1.0, 0.3, 1.0)]
-                    curve.setData(x, y)
-                    curve.setPen(pg.mkPen(QColor(r, g, b, alpha), width=width))
+                # グロー更新（前フレームから使いまわす）
+                for i, glow_item in enumerate(self.core_glow_items):
+                    glow_radius = core_r + 0.015 * i
+                    glow_alpha = max(10, int((self.core_alpha - i * 30) * (1 + 0.2 * np.sin(self.core_pulse_phase + i))))
+                    glow_width = 20 + i * 10
+
+                    gx = glow_radius * np.cos(theta)
+                    gy = glow_radius * np.sin(theta)
+
+                    glow_color = QColor(core_r_color, core_g, core_b, glow_alpha)
+                    glow_item.setData(gx, gy)
+                    glow_item.setPen(pg.mkPen(color=glow_color, width=glow_width))
 
     def start_animation(self, audio_processor, interval=16):
         """
