@@ -71,11 +71,19 @@ class CircularVisualizer:
         self.hue_shift_speed = 0.001
 
         # 中心光のコア
-        self.core_glow_items = []
         self.core_circle = None
         self.core_radius = 0.15
         self.core_alpha = 100
         self.core_pulse_phase = 0.0
+
+        # 粒子
+        self.particle_item = None
+        self.particles = [{'x': random.uniform(-1, 1),
+                           'y': random.uniform(-1, 1),
+                           'vx': random.uniform(-0.0005, 0.0005),
+                           'vy': random.uniform(-0.0005, 0.0005),
+                           'size': random.uniform(2, 4),
+                           'opacity': random.uniform(20, 100)} for _ in range(100)]
 
     def setup_plot(self):
         """
@@ -109,6 +117,10 @@ class CircularVisualizer:
         self.wave_curve = pg.PlotCurveItem()
         self.wave_glow_curve = pg.PlotCurveItem()
         self.core_circle = pg.PlotCurveItem()
+
+        # 粒子の初期化
+        self.particle_item = pg.ScatterPlotItem()
+        self.wave_plot.addItem(self.particle_item)
 
         # 順序: 背面から前面へ
         self.wave_plot.addItem(self.core_circle)
@@ -154,6 +166,16 @@ class CircularVisualizer:
         # 色相を更新
         self.hue = (self.hue + self.hue_shift_speed) % 1.0
         complement_hue = (self.hue + 0.5) % 1.0
+
+        # 粒子を更新
+        for p in self.particles:
+            p['x'] += p['vx']
+            p['y'] += p['vy']
+            if abs(p['x']) > 1: p['vx'] *= -1
+            if abs(p['y']) > 1: p['vy'] *= -1
+
+        spots = [{'pos': (p['x'], p['y']), 'brush': QColor(255, 255, 255, int(p['opacity'])), 'size': p['size']} for p in self.particles]
+        self.particle_item.setData(spots)
 
         # 音声データを取得
         data = audio_processor.get_audio_data()
