@@ -75,11 +75,12 @@ class CircularVisualizer:
         self.hue_shift_speed = 0.001
 
         # 中心光のコア
-        self.core_circle = None
-        self.core_radius = 0.05
-        self.core_glow_layers = 5  # レイヤー数
-        self.core_base_alpha = 50
+        self.core_glow_layers = 8
         self.core_glow_curves = []
+        self.core_base_radius = 0.04
+        self.core_pulse_strength = 0.01
+        self.core_pulse_speed = 0.05
+        self.core_base_alpha = 35
 
     def setup_plot(self):
         """
@@ -120,8 +121,8 @@ class CircularVisualizer:
         self.wave_plot.addItem(self.wave_glow_curve)
         self.wave_plot.addItem(self.wave_curve)
 
-        # 光のコア（中心の円）とそのグロー層
-        for i in range(self.core_glow_layers):
+        # 光のコア（中心の揺れる円）
+        for _ in range(self.core_glow_layers):
             curve = pg.PlotCurveItem()
             self.core_glow_curves.append(curve)
             self.wave_plot.addItem(curve)
@@ -213,20 +214,23 @@ class CircularVisualizer:
                     glow_curve.setData(x, y)
                     glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, alpha), width=width))
 
-                # 中心から揺れる光のコア（pulse感）
-                pulse = 0.005 * np.sin(self.hue * 20 * np.pi)
+                # 光のコア（儚く脈打つ多重円）
+                pulse = self.core_pulse_strength * np.sin(self.hue * 2 * np.pi)  # ゆっくり鼓動
+
                 for i, curve in enumerate(self.core_glow_curves):
-                    factor = (i + 1) / self.core_glow_layers
-                    radius = self.core_radius * (1 + factor * 2) + pulse
-                    alpha = int(self.core_base_alpha * (1 - factor))
-                    width = 2 + i
+                    ratio = (i + 1) / self.core_glow_layers
+                    radius = self.core_base_radius * (1 + ratio * 1.5) + pulse * (1 - ratio)
+                    alpha = int(self.core_base_alpha * (1 - ratio)**1.5)  # より外を儚く
+                    width = 1 + int(3 * (1 - ratio))
 
                     theta = np.linspace(0, 2 * np.pi, 100)
                     x = radius * np.cos(theta)
                     y = radius * np.sin(theta)
 
+                    # 白〜淡い青系で幻想的に
+                    r, g, b = [int(c * 255) for c in colorsys.hsv_to_rgb((self.hue + 0.55) % 1.0, 0.3, 1.0)]
                     curve.setData(x, y)
-                    curve.setPen(pg.mkPen(QColor(255, 255, 255, alpha), width=width))
+                    curve.setPen(pg.mkPen(QColor(r, g, b, alpha), width=width))
 
     def start_animation(self, audio_processor, interval=16):
         """
