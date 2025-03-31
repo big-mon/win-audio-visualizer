@@ -72,18 +72,20 @@
 ```
 win-audio-visualizer/
 ├── src/
-│   ├── app.py               # メインアプリケーション
-│   ├── audio_processor.py   # 音声処理ロジック
-│   └── visualizer.py        # ビジュアライゼーションロジック
-├── docs/                    # ドキュメント
-│   └── requirements.txt     # プロジェクト依存関係
-└── README.md                # プロジェクト概要
+│   ├── core/                       # コア機能
+│   │   ├── audio_processor.py      # 音声処理ロジック
+│   ├── components/                 # コンポーネント
+│   │   └── circular_visualizer.py  # 円形ビジュアライゼーションロジック
+│   └── app.py                      # メインアプリケーション
+├── docs/                           # ドキュメント
+│   └── requirements.txt            # プロジェクト依存関係
+└── README.md                       # プロジェクト概要
 ```
 
 ## 重要な制約
 1. **コード配置**
-   - ビジュアライゼーションは `src/visualizer.py` に配置
-   - 音声処理は `src/audio_processor.py` に配置
+   - ビジュアライゼーションは `src/components/circular_visualizer.py` に配置
+   - 音声処理は `src/core/audio_processor.py` に配置
    - メインアプリケーションは `src/app.py` に配置
 
 ## バージョン管理
