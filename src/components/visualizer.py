@@ -9,7 +9,13 @@ PyQtGraphを使用した高速なリアルタイム描画を実現
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtGui import QColor, QPen
+from PyQt5.QtGui import QColor, QPen, QKeySequence
+from PyQt5.QtWidgets import QShortcut
+import math
+
+"""
+オーディオデータの可視化を行うクラス（PyQtGraph版）
+"""
 
 class Visualizer:
     """

@@ -6,8 +6,8 @@ Windows Audio Session API (WASAPI)を使用したオーディオビジュアラ�
 PC上で再生されている音声をキャプチャして可視化します
 """
 
-from audio_processor import AudioProcessor
-from visualizer import Visualizer
+from core.audio_processor import AudioProcessor
+from components.circular_visualizer import CircularVisualizer
 
 def main():
     """
@@ -16,7 +16,9 @@ def main():
     """
     # オーディオプロセッサーとビジュアライザーを初期化
     processor = AudioProcessor()
-    visualizer = Visualizer()
+
+    # 円形ビジュアライザーを使用
+    visualizer = CircularVisualizer()
 
     try:
         # オーディオキャプチャを開始
