@@ -76,7 +76,6 @@ class CircularVisualizer:
         self.core_radius = 0.15
         self.core_alpha = 100
         self.core_pulse_phase = 0.0
-        self.core_glow_layers = 3
 
     def setup_plot(self):
         """
@@ -110,12 +109,6 @@ class CircularVisualizer:
         self.wave_curve = pg.PlotCurveItem()
         self.wave_glow_curve = pg.PlotCurveItem()
         self.core_circle = pg.PlotCurveItem()
-
-        # グロー用アイテムを生成しておく
-        for i in range(self.core_glow_layers):
-            glow_item = pg.PlotCurveItem()
-            self.core_glow_items.append(glow_item)
-            self.wave_plot.addItem(glow_item)
 
         # 順序: 背面から前面へ
         self.wave_plot.addItem(self.core_circle)
@@ -204,36 +197,22 @@ class CircularVisualizer:
                 self.wave_glow_curve.setData(x, y)
                 self.wave_glow_curve.setPen(pg.mkPen(color=QColor(cr, cg, cb, 30), width=12))
 
-                # 光のコアを更新
-                self.core_pulse_phase += 0.05
-                noise = 0.002 * np.random.randn()
-                pulse_variation = 0.01 * np.sin(self.core_pulse_phase) + noise
+                # 光のコアを更新（滑らかに鼓動する）
+                self.core_pulse_phase += 0.02
+                pulse_base = np.sin(self.core_pulse_phase) * 0.008  # やや小さく
+                envelope = 0.5 * (1 + np.sin(self.core_pulse_phase * 0.5))  # ゆったりした包み
+                pulse_variation = pulse_base * envelope
                 core_r = self.core_radius + pulse_variation
 
                 theta = np.linspace(0, 2*np.pi, 100)
                 cx = core_r * np.cos(theta)
                 cy = core_r * np.sin(theta)
 
-                # 彩度を時間で変化
-                sat = 0.6 + 0.3 * np.sin(self.core_pulse_phase * 0.8)
-                core_r_color, core_g, core_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, sat, 1.0)]
-                core_alpha = int(self.core_alpha + 50 * np.sin(self.core_pulse_phase * 0.5))
+                core_r_color, core_g, core_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.5, 1.0)]
+                core_alpha = int(self.core_alpha + 30 * envelope)
 
                 self.core_circle.setData(cx, cy)
                 self.core_circle.setPen(pg.mkPen(color=QColor(core_r_color, core_g, core_b, core_alpha), width=20))
-
-                # グロー更新（前フレームから使いまわす）
-                for i, glow_item in enumerate(self.core_glow_items):
-                    glow_radius = core_r + 0.015 * i
-                    glow_alpha = max(10, int((self.core_alpha - i * 30) * (1 + 0.2 * np.sin(self.core_pulse_phase + i))))
-                    glow_width = 20 + i * 10
-
-                    gx = glow_radius * np.cos(theta)
-                    gy = glow_radius * np.sin(theta)
-
-                    glow_color = QColor(core_r_color, core_g, core_b, glow_alpha)
-                    glow_item.setData(gx, gy)
-                    glow_item.setPen(pg.mkPen(color=glow_color, width=glow_width))
 
     def start_animation(self, audio_processor, interval=16):
         """
