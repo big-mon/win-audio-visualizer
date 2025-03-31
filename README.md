@@ -45,7 +45,7 @@ python ./src/app.py
 - 主要ライブラリ:
   - sounddevice（WASAPI ループバックに対応）
   - numpy（FFT 処理）
-  - matplotlib（可視化用）
+  - pyqtgraph（可視化用）
 
 ## ライセンス
 
