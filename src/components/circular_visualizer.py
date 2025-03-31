@@ -74,6 +74,13 @@ class CircularVisualizer:
         self.hue = 0.0
         self.hue_shift_speed = 0.001
 
+        # 中心光のコア
+        self.core_circle = None
+        self.core_radius = 0.05
+        self.core_glow_layers = 5  # レイヤー数
+        self.core_base_alpha = 50
+        self.core_glow_curves = []
+
     def setup_plot(self):
         """
         プロットウィンドウを設定
@@ -113,8 +120,15 @@ class CircularVisualizer:
         self.wave_plot.addItem(self.wave_glow_curve)
         self.wave_plot.addItem(self.wave_curve)
 
+        # 光のコア（中心の円）とそのグロー層
+        for i in range(self.core_glow_layers):
+            curve = pg.PlotCurveItem()
+            self.core_glow_curves.append(curve)
+            self.wave_plot.addItem(curve)
+
         layout.addWidget(self.wave_plot)
         self.win.show()
+
         return self.win
 
     def _polar_to_cartesian(self, radius, theta):
@@ -198,6 +212,21 @@ class CircularVisualizer:
                     width = 10 + i * 3
                     glow_curve.setData(x, y)
                     glow_curve.setPen(pg.mkPen(color=QColor(r, g, b, alpha), width=width))
+
+                # 中心から揺れる光のコア（pulse感）
+                pulse = 0.005 * np.sin(self.hue * 20 * np.pi)
+                for i, curve in enumerate(self.core_glow_curves):
+                    factor = (i + 1) / self.core_glow_layers
+                    radius = self.core_radius * (1 + factor * 2) + pulse
+                    alpha = int(self.core_base_alpha * (1 - factor))
+                    width = 2 + i
+
+                    theta = np.linspace(0, 2 * np.pi, 100)
+                    x = radius * np.cos(theta)
+                    y = radius * np.sin(theta)
+
+                    curve.setData(x, y)
+                    curve.setPen(pg.mkPen(QColor(255, 255, 255, alpha), width=width))
 
     def start_animation(self, audio_processor, interval=16):
         """
