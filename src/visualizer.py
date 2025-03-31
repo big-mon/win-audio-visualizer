@@ -3,20 +3,17 @@
 
 """
 オーディオデータの可視化を担当するモジュール
+PyQtGraphを使用した高速なリアルタイム描画を実現
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import rcParams
-from matplotlib.animation import FuncAnimation
-
-# 日本語フォント設定
-plt.rcParams['font.family'] = 'Yu Gothic'  # Windows用日本語フォント
-rcParams['axes.unicode_minus'] = False  # マイナス記号の文字化け防止
+import pyqtgraph as pg
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtGui import QColor, QPen
 
 class Visualizer:
     """
-    オーディオデータの可視化を行うクラス
+    オーディオデータの可視化を行うクラス（PyQtGraph版）
     """
 
     def __init__(self, window_size=2048, sample_rate=44100):
@@ -36,85 +33,138 @@ class Visualizer:
         self.spectrum_data = np.zeros(window_size // 2 + 1)
         self.wave_glow_data = np.zeros(window_size)
         self.spectrum_glow_data = np.zeros(window_size // 2 + 1)
-        self.fig = None
-        self.animation = None
+
+        # アプリケーションとウィンドウの設定
+        self.app = None
+        self.win = None
+        self.timer = None
 
         # ビジュアライザーの設定
         self.spectrum_max = 0.1  # スペクトラムの最大値（自動調整用）
         self.wave_max = 0.1      # 波形の最大値（自動調整用）
         self.smoothing_factor = 0.2  # データの平滑化係数
 
-        self.spectrum_alpha = 1.0 # 初期透明度
-        self.alpha_decay = 0.05   # 透明度減少係数
+        self.spectrum_alpha = 1.0  # 初期透明度
+        self.alpha_decay = 0.05    # 透明度減少係数
+
+        # プロットウィジェットとデータアイテム
+        self.wave_plot = None
+        self.spectrum_plot = None
+        self.wave_curve = None
+        self.wave_glow_curve = None
+        self.spectrum_curve = None
+        self.spectrum_glow_curve = None
+
+        # スペクトラムのX軸データ
+        self.spectrum_x = np.linspace(20, self.sample_rate//2, self.window_size//2 + 1)
 
     def setup_plot(self):
         """
         プロットの初期設定
         """
-        self.fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8))
+        # アプリケーションが存在しない場合は作成
+        if QtWidgets.QApplication.instance() is None:
+            self.app = QtWidgets.QApplication([])
+        else:
+            self.app = QtWidgets.QApplication.instance()
 
-        # 背景色を黒色に
-        self.fig.patch.set_facecolor('black') # 図全体の背景
-        ax1.set_facecolor('black') # 波形プロットの背景
-        ax2.set_facecolor('black') # スペクトラムプロットの背景
+        # ウィンドウの設定
+        self.win = QtWidgets.QMainWindow()
+        self.win.setWindowTitle('オーディオビジュアライザー')
+        self.win.resize(1200, 800)
 
-        # 波形プロット
-        ax1.set_title('波形', color='white')
-        ax1.set_ylim(-1, 1)
-        ax1.set_xlim(0, self.window_size)
-        self.wave_line, = ax1.plot(np.arange(self.window_size), np.zeros(self.window_size))
-        self.wave_line.set_color('skyblue')
-        self.wave_glow_line, = ax1.plot(np.arange(self.window_size), self.wave_glow_data)
-        self.wave_glow_line.set_color('deepskyblue')
-        self.wave_glow_line.set_linewidth(5)
-        self.wave_glow_line.set_alpha(0.05)
-        self.wave_glow_line.set_zorder(1)
+        # 中央ウィジェットとレイアウトの設定
+        central_widget = QtWidgets.QWidget()
+        self.win.setCentralWidget(central_widget)
+        layout = QtWidgets.QVBoxLayout(central_widget)
 
-        # スペクトラムプロット
-        ax2.set_title('スペクトラム', color='white')
-        ax2.set_ylim(-100, 50)
-        ax2.set_xlim(20, 10000)
-        ax2.set_xscale('log')
-        x_vals = np.linspace(0, self.sample_rate//2, self.window_size//2 + 1)
-        self.spectrum_line, = ax2.plot(x_vals, np.zeros(self.window_size//2 + 1))
-        self.spectrum_line.set_color('limegreen')
-        self.spectrum_glow_line, = ax2.plot(x_vals, self.spectrum_glow_data)
-        self.spectrum_glow_line.set_color('mediumseagreen')
-        self.spectrum_glow_line.set_linewidth(5)
-        self.spectrum_glow_line.set_alpha(0.05)
-        self.spectrum_glow_line.set_zorder(1)
+        # 波形プロットの設定
+        self.wave_plot = pg.PlotWidget(title='波形')
+        self.wave_plot.setBackground('black')
+        self.wave_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.wave_plot.setYRange(-1, 1)
+        self.wave_plot.setXRange(0, self.window_size)
 
-        # 軸・ラベルなどの色
-        for ax in (ax1, ax2):
-            ax.xaxis.label.set_color('white')
-            ax.yaxis.label.set_color('white')
-            ax.tick_params(axis='x', colors='white')
-            ax.tick_params(axis='y', colors='white')
-            ax.spines['bottom'].set_color('white')
-            ax.spines['top'].set_color('white')
-            ax.spines['left'].set_color('white')
-            ax.spines['right'].set_color('white')
-            ax.grid(color='gray')
+        # 波形カーブの設定
+        self.wave_curve = self.wave_plot.plot(
+            np.arange(self.window_size),
+            np.zeros(self.window_size),
+            pen=pg.mkPen(color='skyblue', width=1)
+        )
 
-        # グラフの体裁を整える
-        plt.tight_layout()
-        return self.fig
+        # 波形グローエフェクトの設定
+        glow_pen = pg.mkPen(color=QColor(0, 191, 255, 13), width=5)
+        self.wave_glow_curve = self.wave_plot.plot(
+            np.arange(self.window_size),
+            self.wave_glow_data,
+            pen=glow_pen
+        )
 
-    def update_plot(self, frame, audio_processor):
+        # スペクトラムプロットの設定
+        self.spectrum_plot = pg.PlotWidget(title='スペクトラム')
+        self.spectrum_plot.setBackground('black')
+        self.spectrum_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.spectrum_plot.setYRange(-100, 50)
+        self.spectrum_plot.setXRange(20, 10000)
+        self.spectrum_plot.setLogMode(x=True, y=False)  # X軸をlogスケールに
+
+        # スペクトラムカーブの設定
+        self.spectrum_curve = self.spectrum_plot.plot(
+            self.spectrum_x,
+            np.zeros(self.window_size//2 + 1),
+            pen=pg.mkPen(color='limegreen', width=1)
+        )
+
+        # スペクトラムグローエフェクトの設定
+        spectrum_glow_pen = pg.mkPen(color=QColor(60, 179, 113, 13), width=5)
+        self.spectrum_glow_curve = self.spectrum_plot.plot(
+            self.spectrum_x,
+            self.spectrum_glow_data,
+            pen=spectrum_glow_pen
+        )
+
+        # テキストの色を白に設定
+        self._set_text_color(self.wave_plot)
+        self._set_text_color(self.spectrum_plot)
+
+        # レイアウトにプロットを追加
+        layout.addWidget(self.wave_plot)
+        layout.addWidget(self.spectrum_plot)
+
+        # ウィンドウを表示
+        self.win.show()
+
+        return self.win
+
+    def _set_text_color(self, plot_widget):
+        """
+        プロットウィジェットのテキスト色を設定
+
+        Parameters
+        ----------
+        plot_widget : pg.PlotWidget
+            テキスト色を設定するプロットウィジェット
+        """
+        # タイトルの色を設定（直接文字列を指定せず、現在のタイトルを維持）
+        title = plot_widget.plotItem.titleLabel.text
+        plot_widget.setTitle(title, color='white')
+
+        # 軸ラベルの色を設定
+        plot_widget.getAxis('bottom').setPen(pg.mkPen(color='white'))
+        plot_widget.getAxis('left').setPen(pg.mkPen(color='white'))
+
+        # 軸の数値の色を設定
+        plot_widget.getAxis('bottom').setTextPen(pg.mkPen(color='white'))
+        plot_widget.getAxis('left').setTextPen(pg.mkPen(color='white'))
+
+    def update_plot(self, audio_processor):
         """
         プロットを更新
 
         Parameters
         ----------
-        frame : int
-            フレーム番号
         audio_processor : AudioProcessor
             オーディオプロセッサーインスタンス
-
-        Returns
-        -------
-        tuple
-            更新されたプロットのライン
         """
         # オーディオデータを取得
         data = audio_processor.get_audio_data()
@@ -129,11 +179,10 @@ class Visualizer:
                 normalized_wave = wave_data / self.wave_max
                 self.plot_data = normalized_wave
                 self.wave_glow_data = normalized_wave  # ← 毎回更新
-                try:
-                    self.wave_line.set_ydata(self.plot_data)
-                    self.wave_glow_line.set_ydata(self.wave_glow_data)
-                except RuntimeError:
-                    pass
+
+                # 波形プロットの更新
+                self.wave_curve.setData(np.arange(self.window_size), self.plot_data)
+                self.wave_glow_curve.setData(np.arange(self.window_size), self.wave_glow_data)
 
                 # フェード処理（スペクトラム）
                 amplitude = np.max(np.abs(wave_data))
@@ -145,17 +194,21 @@ class Visualizer:
                          self.smoothing_factor * spectrum_data
                 self.spectrum_glow_data = self.spectrum_data  # ← 条件外でも更新
 
-                try:
-                    self.spectrum_line.set_ydata(self.spectrum_data)
-                    self.spectrum_line.set_alpha(self.spectrum_alpha)
-                    self.spectrum_glow_line.set_ydata(self.spectrum_glow_data)
-                    self.spectrum_glow_line.set_alpha(self.spectrum_alpha * 0.3)
-                except RuntimeError:
-                    pass
+                # スペクトラムプロットの更新
+                self.spectrum_curve.setData(self.spectrum_x, self.spectrum_data)
 
-        return self.wave_line, self.wave_glow_line, self.spectrum_line, self.spectrum_glow_line
+                # 透明度の設定
+                spectrum_pen = pg.mkPen(color=QColor(50, 205, 50, int(255 * self.spectrum_alpha)), width=1)
+                self.spectrum_curve.setPen(spectrum_pen)
 
-    def start_animation(self, audio_processor, interval=10):
+                spectrum_glow_pen = pg.mkPen(
+                    color=QColor(60, 179, 113, int(255 * self.spectrum_alpha * 0.3)),
+                    width=5
+                )
+                self.spectrum_glow_curve.setData(self.spectrum_x, self.spectrum_glow_data)
+                self.spectrum_glow_curve.setPen(spectrum_glow_pen)
+
+    def start_animation(self, audio_processor, interval=16):
         """
         アニメーションを開始
 
@@ -164,27 +217,28 @@ class Visualizer:
         audio_processor : AudioProcessor
             オーディオプロセッサーインスタンス
         interval : int, optional
-            アニメーションの更新間隔（ミリ秒）
+            アニメーションの更新間隔（ミリ秒）、約60FPSを目標
         """
-        if self.fig is None:
+        if self.win is None:
             self.setup_plot()
 
-        self.animation = FuncAnimation(
-            self.fig,
-            self.update_plot,
-            fargs=(audio_processor,),
-            interval=interval,
-            blit=True,
-            cache_frame_data=False
-        )
-        plt.show()
+        # タイマーを設定
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(lambda: self.update_plot(audio_processor))
+        self.timer.start(interval)
+
+        # イベントループを開始
+        if self.app is not None:
+            self.app.exec_()
 
     def stop_animation(self):
         """
         アニメーションを停止
         """
-        if self.animation is not None:
-            self.animation.event_source.stop()
-            plt.close(self.fig)
-            self.fig = None
-            self.animation = None
+        if self.timer is not None:
+            self.timer.stop()
+            self.timer = None
+
+        if self.win is not None:
+            self.win.close()
+            self.win = None
