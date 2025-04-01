@@ -75,47 +75,49 @@ class CircularVisualizer:
         
         # 波の動きに関するパラメータ
         self.wave_time = 0.0
-        self.wave_speed = 0.008  # 呼吸のような自然な速度に調整
-        self.harmonic_factors = [0.1, 0.3, 0.5, 0.7, 0.9]  # より低い周波数に調整
-        self.harmonic_weights = [0.4, 0.3, 0.15, 0.1, 0.05]  # 低周波成分をさらに強調
-        self.phase_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
+        self.wave_speed = 0.005  # よりゆっくりとした動き
+        self.harmonic_factors = [0.05, 0.15, 0.25, 0.35, 0.45]  # より低い周波数に調整
+        self.harmonic_weights = [0.5, 0.25, 0.15, 0.07, 0.03]  # 低周波成分をさらに強調
+        self.phase_offsets = [0.0, 0.8, 1.6, 2.4, 3.2]
         
         # 呼吸のような自然な揺らぎのための追加パラメータ
         self.breath_phase = 0.0
-        self.breath_speed = 0.003  # 呼吸の速度（ゆっくり）
-        self.breath_depth = 0.06   # 呼吸の深さ（揺らぎの大きさ）
+        self.breath_speed = 0.002  # よりゆっくりとした呼吸
+        self.breath_depth = 0.08   # より深い呼吸の表現
         
         # 波形の履歴（残像効果用）
         self.wave_history = []
-        self.history_length = 5
-        self.history_decay = 0.7
+        self.history_length = 8  # 履歴を増やしてより豊かな残像効果
+        self.history_decay = 0.85  # よりゆっくりとした減衰
 
         # 中心光のコア
         self.core_circle = None
-        self.core_radius = 0.15
-        self.core_alpha = 100
+        self.core_radius = 0.18  # より大きな中心コア
+        self.core_alpha = 120  # より強い輝き
         self.core_pulse_phase = 0.0
+        self.core_pulse_speed = 0.003  # ゆっくりとした脈動
+        self.core_pulse_depth = 0.15  # より大きな脈動
         
         # 内側の光の輪
         self.inner_core = None
-        self.inner_core_radius = 0.08
+        self.inner_core_radius = 0.12
         
         # 光の粒子
         self.particle_item = None
         self.particles = [{'x': random.uniform(-1, 1),
                            'y': random.uniform(-1, 1),
-                           'vx': random.uniform(-0.0005, 0.0005),
-                           'vy': random.uniform(-0.0005, 0.0005),
-                           'size': random.uniform(2, 4),
-                           'opacity': random.uniform(20, 100),
-                           'life': random.uniform(0.8, 1.0)} for _ in range(150)]
+                           'vx': random.uniform(-0.0003, 0.0003),
+                           'vy': random.uniform(-0.0003, 0.0003),
+                           'size': random.uniform(2, 5),
+                           'opacity': random.uniform(30, 120),
+                           'life': random.uniform(0.9, 1.0)} for _ in range(200)]  # 粒子数増加
         
         # 光の線（知性を表現）
         self.light_lines = []
         self.line_items = []
-        self.max_lines = 8
-        self.line_spawn_chance = 0.02
-        self.line_life_max = 1.0
+        self.max_lines = 12  # より多くの光の線
+        self.line_spawn_chance = 0.015  # よりゆっくりとした生成
+        self.line_life_max = 1.5  # より長い寿命
 
     def setup_plot(self):
         """
@@ -431,10 +433,9 @@ class CircularVisualizer:
                     
                     # 線の長さをチェック - 異常に長い線は描画しない
                     line_length = np.sqrt((ex-sx)**2 + (ey-sy)**2)
-                    max_allowed_length = 1.0  # 画面の半分程度を最大長とする
                     
                     # 線を描画（長さが適切な場合のみ）
-                    if i < len(self.line_items) and line_length <= max_allowed_length:
+                    if i < len(self.line_items) and line_length <= 0.8:  # 最大距離を制限
                         self.line_items[i].setData(bx, by)
                         self.line_items[i].setPen(pg.mkPen(color=QColor(lr, lg, lb, opacity), width=line['width']))
                     else:
