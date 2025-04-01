@@ -75,10 +75,15 @@ class CircularVisualizer:
         
         # 波の動きに関するパラメータ
         self.wave_time = 0.0
-        self.wave_speed = 0.02
-        self.harmonic_factors = [0.5, 1.0, 1.5, 2.0, 2.5]
-        self.harmonic_weights = [0.2, 0.3, 0.2, 0.15, 0.15]
+        self.wave_speed = 0.008  # 呼吸のような自然な速度に調整
+        self.harmonic_factors = [0.1, 0.3, 0.5, 0.7, 0.9]  # より低い周波数に調整
+        self.harmonic_weights = [0.4, 0.3, 0.15, 0.1, 0.05]  # 低周波成分をさらに強調
         self.phase_offsets = [0.0, 0.5, 1.0, 1.5, 2.0]
+        
+        # 呼吸のような自然な揺らぎのための追加パラメータ
+        self.breath_phase = 0.0
+        self.breath_speed = 0.003  # 呼吸の速度（ゆっくり）
+        self.breath_depth = 0.06   # 呼吸の深さ（揺らぎの大きさ）
         
         # 波形の履歴（残像効果用）
         self.wave_history = []
@@ -211,13 +216,26 @@ class CircularVisualizer:
         """
         wave = np.zeros(self.num_points)
         
+        # 低周波のゆったりとした動きを生成
         for i, (factor, weight) in enumerate(zip(self.harmonic_factors, self.harmonic_weights)):
             phase = self.wave_time * factor + self.phase_offsets[i] + phase_offset
             # 円形に閉じるよう、最後の点が最初の点と一致するようにする
             harmonic = weight * np.sin(self.theta * factor + phase)
             wave += harmonic
+        
+        # 呼吸のような自然な揺らぎを追加
+        breath_effect = self.breath_depth * np.sin(self.breath_phase + self.theta * 0.5)
+        wave += breath_effect
+        
+        # 波形をスムージング（移動平均）して急激な変化を抑制
+        window_size = 5
+        smoothed_wave = np.zeros_like(wave)
+        padded_wave = np.pad(wave, (window_size//2, window_size//2), mode='wrap')
+        
+        for i in range(len(wave)):
+            smoothed_wave[i] = np.mean(padded_wave[i:i+window_size])
             
-        return wave * base_amplitude
+        return smoothed_wave * base_amplitude
         
     def _spawn_light_line(self, intensity):
         """
@@ -235,28 +253,35 @@ class CircularVisualizer:
             
             # 線の終点（外側）- 始点と同じ方向に伸ばす（角度の差を小さくする）
             end_radius = self.base_radius + random.random() * 0.3
-            # 角度の差を小さくして、より円に沿った動きにする
-            angle_diff = random.uniform(-0.2, 0.2)  # 角度の差を±0.2ラジアン（約±11度）に制限
+            # 角度の差をさらに小さくして、より円に沿った動きにする
+            angle_diff = random.uniform(-0.1, 0.1)  # 角度の差を±0.1ラジアン（約±5.7度）に制限
             end_angle = start_angle + angle_diff
             
             # 線の中間点（曲線を作るため）- 始点と終点の間に配置
             mid_radius = (start_radius + end_radius) * 0.5
             # 中間点も同様に角度の差を小さくする
-            mid_angle = (start_angle + end_angle) * 0.5 + random.uniform(-0.1, 0.1)
+            mid_angle = (start_angle + end_angle) * 0.5 + random.uniform(-0.05, 0.05)
             
-            # 色相はメインの色相に近いものを選択
-            hue_offset = random.uniform(-0.1, 0.1)
-            line_hue = (self.hue + hue_offset) % 1.0
+            # 始点と終点の距離をチェック - 距離が大きすぎる場合は生成しない
+            sx, sy = self._polar_to_cartesian(start_radius, start_angle)
+            ex, ey = self._polar_to_cartesian(end_radius, end_angle)
+            distance = np.sqrt((ex-sx)**2 + (ey-sy)**2)
             
-            self.light_lines.append({
-                'start': (start_radius, start_angle),
-                'mid': (mid_radius, mid_angle),
-                'end': (end_radius, end_angle),
-                'width': random.uniform(1.5, 3.0),
-                'hue': line_hue,
-                'life': self.line_life_max,
-                'max_opacity': random.randint(150, 220)
-            })
+            # 距離が適切な場合のみ線を生成
+            if distance <= 0.8:  # 最大距離を制限
+                # 色相はメインの色相に近いものを選択
+                hue_offset = random.uniform(-0.1, 0.1)
+                line_hue = (self.hue + hue_offset) % 1.0
+                
+                self.light_lines.append({
+                    'start': (start_radius, start_angle),
+                    'mid': (mid_radius, mid_angle),
+                    'end': (end_radius, end_angle),
+                    'width': random.uniform(1.5, 3.0),
+                    'hue': line_hue,
+                    'life': self.line_life_max,
+                    'max_opacity': random.randint(150, 220)
+                })
 
     def update_plot(self, audio_processor):
         """
@@ -269,6 +294,7 @@ class CircularVisualizer:
         """
         # 時間と色相を更新
         self.wave_time += self.wave_speed
+        self.breath_phase += self.breath_speed  # 呼吸の位相を更新
         self.hue = (self.hue + self.hue_shift_speed) % 1.0
         complement_hue = (self.hue + 0.5) % 1.0
         
@@ -308,8 +334,8 @@ class CircularVisualizer:
                 # 波形とスペクトラムを組み合わせる
                 combined = 0.5 * resampled_wave + 0.5 * spectrum_values
                 
-                # 有機的な波動を生成
-                organic_wave = self._create_harmonic_wave(0.08)
+                # 有機的な波動を生成（呼吸のような自然な揺らぎ）
+                organic_wave = self._create_harmonic_wave(0.06)  # 揺らぎを適度に増加
                 
                 # 音声に反応する波動を生成
                 reactive_wave = combined * self.wave_scale
@@ -317,9 +343,9 @@ class CircularVisualizer:
                 # 最終的な波形を計算
                 radius_raw = self.base_radius + reactive_wave + organic_wave
                 
-                # 内側と外側の波形を計算
-                inner_radius_raw = self.base_radius * 0.85 + reactive_wave * 0.7 + self._create_harmonic_wave(0.05, 0.5)
-                outer_radius_raw = self.base_radius * 1.15 + reactive_wave * 1.2 + self._create_harmonic_wave(0.1, 1.0)
+                # 内側と外側の波形を計算（有機的な波動の振幅を調整）
+                inner_radius_raw = self.base_radius * 0.85 + reactive_wave * 0.7 + self._create_harmonic_wave(0.04, 0.5)
+                outer_radius_raw = self.base_radius * 1.15 + reactive_wave * 1.2 + self._create_harmonic_wave(0.07, 1.0)
                 
                 # スプライン補間で滑らかな閉曲線を作成
                 def create_smooth_closed_curve(radius_values, theta_values, smoothness=0.0):
