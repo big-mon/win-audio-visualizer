@@ -137,15 +137,19 @@ class CircularVisualizer:
         central_widget = QtWidgets.QWidget()
         self.win.setCentralWidget(central_widget)
         layout = QtWidgets.QVBoxLayout(central_widget)
+        layout.setContentsMargins(0, 0, 0, 0)  # マージンを0に設定
 
         # 波形プロット
         self.wave_plot = pg.PlotWidget()
-        self.wave_plot.setBackground((5, 5, 15))  # より暗く、青みがかった背景
+        self.wave_plot.setBackground('k')  # 純粋な黒背景
+        self.wave_plot.getViewBox().setBackgroundColor('k')  # ビューボックスも黒に
         self.wave_plot.setAspectLocked(True)
         self.wave_plot.hideAxis('left')
         self.wave_plot.hideAxis('bottom')
         self.wave_plot.setXRange(-1, 1)
         self.wave_plot.setYRange(-1, 1)
+        self.wave_plot.getViewBox().setMouseEnabled(x=False, y=False)  # マウス操作を無効化
+        self.wave_plot.getViewBox().setMenuEnabled(False)  # コンテキストメニューを無効化
 
         # 波形レイヤーの初期化（奥から前へ）
         self.inner_core = pg.PlotCurveItem(pen=pg.mkPen(width=15), connect="all")  # connectパラメータを追加
@@ -175,6 +179,7 @@ class CircularVisualizer:
 
         # プロットウィンドウをレイアウトに追加
         layout.addWidget(self.wave_plot)
+        layout.setSpacing(0)  # スペーシングを0に設定
         self.win.show()
         return self.win
 
@@ -331,7 +336,50 @@ class CircularVisualizer:
                 sound_intensity = min(1.0, sound_intensity)
                 
                 # 光の線を生成
-                self._spawn_light_line(sound_intensity)
+                if random.random() < self.line_spawn_chance and len(self.light_lines) < self.max_lines:
+                    # 新しい光の線を生成
+                    angle = random.uniform(0, 2 * np.pi)
+                    # 内側から外側に向かう線のみを生成
+                    start_radius = random.uniform(0.2, 0.3)
+                    end_radius = random.uniform(0.35, 0.5)
+                    # 角度の変化を制限
+                    angle_change = random.uniform(-0.2, 0.2)
+                    self.light_lines.append({
+                        'start_angle': angle,
+                        'end_angle': angle + angle_change,
+                        'start_radius': start_radius,
+                        'end_radius': end_radius,
+                        'life': self.line_life_max,
+                        'width': random.uniform(1, 2)
+                    })
+                
+                # 既存の光の線を更新
+                for i, line in enumerate(self.light_lines[:]):
+                    line['life'] -= 0.01
+                    if line['life'] <= 0:
+                        self.light_lines.remove(line)
+                        self.line_items[i].setData([], [])
+                        continue
+                    
+                    # 線の座標を計算
+                    x1, y1 = self._polar_to_cartesian(line['start_radius'], line['start_angle'])
+                    x2, y2 = self._polar_to_cartesian(line['end_radius'], line['end_angle'])
+                    
+                    # 線の長さをチェック
+                    line_length = np.sqrt((x2-x1)**2 + (y2-y1)**2)
+                    if line_length > 0.5:  # 長すぎる線は描画しない
+                        self.light_lines.remove(line)
+                        self.line_items[i].setData([], [])
+                        continue
+                    
+                    # 線の色を設定（より淡い色に）
+                    line_color = QColor(*[int(c * 255) for c in colorsys.hsv_to_rgb((self.hue + 0.2) % 1.0, 0.4, 1.0)])
+                    line_color.setAlpha(int(80 * line['life']))
+                    
+                    # 線を描画
+                    if i < len(self.line_items):
+                        self.line_items[i].setData([x1, x2], [y1, y2], 
+                                                 pen=QPen(line_color, line['width']))
                 
                 # 波形とスペクトラムを組み合わせる
                 combined = 0.5 * resampled_wave + 0.5 * spectrum_values
@@ -405,43 +453,6 @@ class CircularVisualizer:
                     opacity = int(40 * decay_factor * self.history_decay)
                     hx, hy = self._polar_to_cartesian(hist_radius, self.theta)
                     
-                # 光の線を更新
-                for i, line in enumerate(self.light_lines):
-                    line['life'] -= 0.01
-                    if line['life'] <= 0:
-                        # 寿命が尽きた線を削除
-                        self.light_lines.remove(line)
-                        self.line_items[i].setData([], [])
-                        continue
-                        
-                    # 線の不透明度を計算（寿命に応じて）
-                    life_factor = line['life'] / self.line_life_max
-                    opacity = int(line['max_opacity'] * life_factor)
-                    
-                    # 線の色を計算
-                    lr, lg, lb = [int(c * 255) for c in colorsys.hsv_to_rgb(line['hue'], 0.8, 1.0)]
-                    
-                    # 線の座標を計算（ベジェ曲線で滑らかに）
-                    t = np.linspace(0, 1, 20)
-                    sx, sy = self._polar_to_cartesian(line['start'][0], line['start'][1])
-                    mx, my = self._polar_to_cartesian(line['mid'][0], line['mid'][1])
-                    ex, ey = self._polar_to_cartesian(line['end'][0], line['end'][1])
-                    
-                    # 二次ベジェ曲線
-                    bx = (1-t)**2 * sx + 2*(1-t)*t * mx + t**2 * ex
-                    by = (1-t)**2 * sy + 2*(1-t)*t * my + t**2 * ey
-                    
-                    # 線の長さをチェック - 異常に長い線は描画しない
-                    line_length = np.sqrt((ex-sx)**2 + (ey-sy)**2)
-                    
-                    # 線を描画（長さが適切な場合のみ）
-                    if i < len(self.line_items) and line_length <= 0.8:  # 最大距離を制限
-                        self.line_items[i].setData(bx, by)
-                        self.line_items[i].setPen(pg.mkPen(color=QColor(lr, lg, lb, opacity), width=line['width']))
-                    else:
-                        # 異常な線は空のデータで描画をスキップ
-                        self.line_items[i].setData([], [])
-                
                 # 粒子を更新
                 for p in self.particles:
                     # 粒子の位置を更新
