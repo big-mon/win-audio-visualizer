@@ -233,13 +233,16 @@ class CircularVisualizer:
             start_radius = self.core_radius * (0.8 + random.random() * 0.4)
             start_angle = random.random() * 2 * np.pi
             
-            # 線の終点（外側）
+            # 線の終点（外側）- 始点と同じ方向に伸ばす（角度の差を小さくする）
             end_radius = self.base_radius + random.random() * 0.3
-            end_angle = start_angle + random.uniform(-0.5, 0.5)
+            # 角度の差を小さくして、より円に沿った動きにする
+            angle_diff = random.uniform(-0.2, 0.2)  # 角度の差を±0.2ラジアン（約±11度）に制限
+            end_angle = start_angle + angle_diff
             
-            # 線の中間点（曲線を作るため）
+            # 線の中間点（曲線を作るため）- 始点と終点の間に配置
             mid_radius = (start_radius + end_radius) * 0.5
-            mid_angle = (start_angle + end_angle) * 0.5 + random.uniform(-0.3, 0.3)
+            # 中間点も同様に角度の差を小さくする
+            mid_angle = (start_angle + end_angle) * 0.5 + random.uniform(-0.1, 0.1)
             
             # 色相はメインの色相に近いものを選択
             hue_offset = random.uniform(-0.1, 0.1)
@@ -400,11 +403,18 @@ class CircularVisualizer:
                     bx = (1-t)**2 * sx + 2*(1-t)*t * mx + t**2 * ex
                     by = (1-t)**2 * sy + 2*(1-t)*t * my + t**2 * ey
                     
-                    # 線を描画
-                    if i < len(self.line_items):
+                    # 線の長さをチェック - 異常に長い線は描画しない
+                    line_length = np.sqrt((ex-sx)**2 + (ey-sy)**2)
+                    max_allowed_length = 1.0  # 画面の半分程度を最大長とする
+                    
+                    # 線を描画（長さが適切な場合のみ）
+                    if i < len(self.line_items) and line_length <= max_allowed_length:
                         self.line_items[i].setData(bx, by)
                         self.line_items[i].setPen(pg.mkPen(color=QColor(lr, lg, lb, opacity), width=line['width']))
-
+                    else:
+                        # 異常な線は空のデータで描画をスキップ
+                        self.line_items[i].setData([], [])
+                
                 # 粒子を更新
                 for p in self.particles:
                     # 粒子の位置を更新
