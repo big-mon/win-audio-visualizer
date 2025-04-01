@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import QShortcut
 import math
 import random
 import colorsys
+from scipy.interpolate import splprep, splev
 
 """
 オーディオデータの可視化を行うクラス（PyQtGraph版）
@@ -311,30 +312,40 @@ class CircularVisualizer:
                 reactive_wave = combined * self.wave_scale
                 
                 # 最終的な波形を計算
-                radius = self.base_radius + reactive_wave + organic_wave
+                radius_raw = self.base_radius + reactive_wave + organic_wave
                 
                 # 内側と外側の波形を計算
-                inner_radius = self.base_radius * 0.85 + reactive_wave * 0.7 + self._create_harmonic_wave(0.05, 0.5)
-                outer_radius = self.base_radius * 1.15 + reactive_wave * 1.2 + self._create_harmonic_wave(0.1, 1.0)
+                inner_radius_raw = self.base_radius * 0.85 + reactive_wave * 0.7 + self._create_harmonic_wave(0.05, 0.5)
+                outer_radius_raw = self.base_radius * 1.15 + reactive_wave * 1.2 + self._create_harmonic_wave(0.1, 1.0)
                 
-                # 波形の履歴に追加
-                self.wave_history.append(radius.copy())
-                if len(self.wave_history) > self.history_length:
-                    self.wave_history.pop(0)
+                # スプライン補間で滑らかな閉曲線を作成
+                def create_smooth_closed_curve(radius_values, theta_values, smoothness=0.0):
+                    # 極座標からデカルト座標に変換
+                    x = radius_values * np.cos(theta_values)
+                    y = radius_values * np.sin(theta_values)
+                    
+                    # スプライン補間のためのパラメータ（周期的なスプライン）
+                    tck, u = splprep([x, y], s=smoothness, per=True)
+                    
+                    # 補間された曲線を生成（元の点数と同じ点数で評価）
+                    u_new = np.linspace(0, 1, len(radius_values), endpoint=True)
+                    x_new, y_new = splev(u_new, tck)
+                    
+                    return x_new, y_new
                 
-                # 座標変換 - 始点と終点を確実に同じ座標にするため、角度を調整
-                theta_closed = np.linspace(0, 2*np.pi, self.num_points, endpoint=False)  # endpointをFalseに
-                theta_closed = np.append(theta_closed, 0)  # 最初の角度を最後に追加して円を閉じる
+                # 滑らかな閉曲線を生成
+                theta_closed = self.theta  # すでにendpoint=Trueで生成されているthetaを使用
+                x, y = create_smooth_closed_curve(radius_raw, theta_closed, smoothness=0.1)
+                inner_x, inner_y = create_smooth_closed_curve(inner_radius_raw, theta_closed, smoothness=0.1)
+                outer_x, outer_y = create_smooth_closed_curve(outer_radius_raw, theta_closed, smoothness=0.1)
                 
-                # 半径も同様に調整（最後の点は最初の点と同じ値にする）
-                radius_closed = np.append(radius, radius[0])
-                inner_radius_closed = np.append(inner_radius, inner_radius[0])
-                outer_radius_closed = np.append(outer_radius, outer_radius[0])
-                
-                # 座標変換
-                x, y = self._polar_to_cartesian(radius_closed, theta_closed)
-                inner_x, inner_y = self._polar_to_cartesian(inner_radius_closed, theta_closed)
-                outer_x, outer_y = self._polar_to_cartesian(outer_radius_closed, theta_closed)
+                # 波形の履歴に追加（スプライン補間後のデータ）
+                if len(x) > 0:
+                    # 極座標に戻す（履歴用）
+                    new_radius = np.sqrt(x**2 + y**2)
+                    self.wave_history.append(new_radius)
+                    if len(self.wave_history) > self.history_length:
+                        self.wave_history.pop(0)
                 
                 # 色を計算
                 main_r, main_g, main_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.8, 1.0)]
@@ -437,17 +448,17 @@ class CircularVisualizer:
                 # 音の強度に応じてコアが反応
                 core_r += sound_intensity * 0.02
                 
-                # 円形のコアを描画するための角度（完全な円になるよう点を追加）
+                # 円形のコアを描画するためのスプライン補間
                 theta = np.linspace(0, 2*np.pi, 100, endpoint=False)
-                theta = np.append(theta, 0)  # 最初の角度を最後に追加して円を閉じる
                 
-                cx = core_r * np.cos(theta)
-                cy = core_r * np.sin(theta)
+                # コアの円は完全な円なので、単純に最初の点を最後に追加
+                cx = core_r * np.cos(np.append(theta, theta[0]))
+                cy = core_r * np.sin(np.append(theta, theta[0]))
                 
                 # 内側のコア
                 inner_core_r = self.inner_core_radius + pulse_variation * 0.5 + sound_intensity * 0.01
-                icx = inner_core_r * np.cos(theta)
-                icy = inner_core_r * np.sin(theta)
+                icx = inner_core_r * np.cos(np.append(theta, theta[0]))
+                icy = inner_core_r * np.sin(np.append(theta, theta[0]))
                 
                 # コアの色を計算
                 core_r_color, core_g, core_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.5, 1.0)]
