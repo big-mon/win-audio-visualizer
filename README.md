@@ -1,5 +1,7 @@
 # win-audio-visualizer
 
+![screenshot](./image.jpg)
+
 Windows 11 向けオーディオビジュアライザーアプリケーション
 
 ## 概要
