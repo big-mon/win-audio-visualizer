@@ -63,11 +63,11 @@ class CircularVisualizer:
         self.inner_wave_curve = None
         self.outer_wave_curve = None
 
-        self.num_points = 360
+        self.num_points = 720  # 360から720に増やして滑らかさを向上
         self.base_radius = 0.4
         self.wave_scale = 0.2
         self.spectrum_scale = 0.2
-        self.theta = np.linspace(0, 2*np.pi, self.num_points)
+        self.theta = np.linspace(0, 2*np.pi, self.num_points, endpoint=True)  # endpointをTrueに設定して円を閉じる
         self.spectrum_indices = np.linspace(0, self.window_size//2, self.num_points, dtype=int)
         self.hue = 0.0
         self.hue_shift_speed = 0.001
@@ -140,13 +140,13 @@ class CircularVisualizer:
         self.wave_plot.setYRange(-1, 1)
 
         # 波形レイヤーの初期化（奥から前へ）
-        self.inner_core = pg.PlotCurveItem()
-        self.core_circle = pg.PlotCurveItem()
-        self.inner_wave_curve = pg.PlotCurveItem()
-        self.wave_glow_curve = pg.PlotCurveItem()
-        self.wave_curve = pg.PlotCurveItem()
-        self.outer_wave_curve = pg.PlotCurveItem()
-
+        self.inner_core = pg.PlotCurveItem(pen=pg.mkPen(width=15), connect="all")  # connectパラメータを追加
+        self.core_circle = pg.PlotCurveItem(pen=pg.mkPen(width=20), connect="all")
+        self.inner_wave_curve = pg.PlotCurveItem(pen=pg.mkPen(width=1.5), connect="all")
+        self.wave_glow_curve = pg.PlotCurveItem(pen=pg.mkPen(width=15), connect="all")
+        self.wave_curve = pg.PlotCurveItem(pen=pg.mkPen(width=2), connect="all")
+        self.outer_wave_curve = pg.PlotCurveItem(pen=pg.mkPen(width=1.5), connect="all")
+        
         # 粒子の初期化
         self.particle_item = pg.ScatterPlotItem()
         
@@ -212,6 +212,7 @@ class CircularVisualizer:
         
         for i, (factor, weight) in enumerate(zip(self.harmonic_factors, self.harmonic_weights)):
             phase = self.wave_time * factor + self.phase_offsets[i] + phase_offset
+            # 円形に閉じるよう、最後の点が最初の点と一致するようにする
             harmonic = weight * np.sin(self.theta * factor + phase)
             wave += harmonic
             
@@ -321,10 +322,19 @@ class CircularVisualizer:
                 if len(self.wave_history) > self.history_length:
                     self.wave_history.pop(0)
                 
+                # 座標変換 - 始点と終点を確実に同じ座標にするため、角度を調整
+                theta_closed = np.linspace(0, 2*np.pi, self.num_points, endpoint=False)  # endpointをFalseに
+                theta_closed = np.append(theta_closed, 0)  # 最初の角度を最後に追加して円を閉じる
+                
+                # 半径も同様に調整（最後の点は最初の点と同じ値にする）
+                radius_closed = np.append(radius, radius[0])
+                inner_radius_closed = np.append(inner_radius, inner_radius[0])
+                outer_radius_closed = np.append(outer_radius, outer_radius[0])
+                
                 # 座標変換
-                x, y = self._polar_to_cartesian(radius, self.theta)
-                inner_x, inner_y = self._polar_to_cartesian(inner_radius, self.theta)
-                outer_x, outer_y = self._polar_to_cartesian(outer_radius, self.theta)
+                x, y = self._polar_to_cartesian(radius_closed, theta_closed)
+                inner_x, inner_y = self._polar_to_cartesian(inner_radius_closed, theta_closed)
+                outer_x, outer_y = self._polar_to_cartesian(outer_radius_closed, theta_closed)
                 
                 # 色を計算
                 main_r, main_g, main_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.8, 1.0)]
@@ -427,7 +437,10 @@ class CircularVisualizer:
                 # 音の強度に応じてコアが反応
                 core_r += sound_intensity * 0.02
                 
-                theta = np.linspace(0, 2*np.pi, 100)
+                # 円形のコアを描画するための角度（完全な円になるよう点を追加）
+                theta = np.linspace(0, 2*np.pi, 100, endpoint=False)
+                theta = np.append(theta, 0)  # 最初の角度を最後に追加して円を閉じる
+                
                 cx = core_r * np.cos(theta)
                 cy = core_r * np.sin(theta)
                 
@@ -435,7 +448,7 @@ class CircularVisualizer:
                 inner_core_r = self.inner_core_radius + pulse_variation * 0.5 + sound_intensity * 0.01
                 icx = inner_core_r * np.cos(theta)
                 icy = inner_core_r * np.sin(theta)
-
+                
                 # コアの色を計算
                 core_r_color, core_g, core_b = [int(c * 255) for c in colorsys.hsv_to_rgb(self.hue, 0.5, 1.0)]
                 core_alpha = int(self.core_alpha + 30 * envelope + sound_intensity * 50)
